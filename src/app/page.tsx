@@ -18,8 +18,17 @@ const CATEGORIES = [
   { name: 'Mover Muebles', icon: '🛋️', slug: 'mover-muebles', img: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&q=80' },
   { name: 'Jardinería', icon: '🌿', slug: 'jardineria', img: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&q=80' },
   { name: 'Ayuda Digital', icon: '💻', slug: 'ayuda-digital', img: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&q=80' },
-  { name: 'Proyectos de Construcción', icon: '🏢', slug: 'proyectos-construccion', img: 'https://images.unsplash.com/photo-1590725140246-20acddc1ec6d?w=400&q=80' },
+  { name: 'Proyectos de Construcción', icon: '🏢', slug: 'proyectos-construccion', img: 'https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&q=80' },
   { name: 'Asistencia Personal', icon: '🤝', slug: 'asistencia-personal', img: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=400&q=80' },
+]
+
+const DEMO_TASKS = [
+  { id:'d1', title:'Instalar aire acondicionado split 12,000 BTU', location_zone:'Marbella', budget:180, offers_count:3, created_at: new Date().toISOString(), categories:{ name:'Aire Acondicionado', icon:'❄️' }, description:'Necesito instalar un minisplit en la sala, ya tengo el equipo.' },
+  { id:'d2', title:'Reparar fuga de agua en baño principal', location_zone:'San Francisco', budget:80, offers_count:2, created_at: new Date(Date.now()-3600000).toISOString(), categories:{ name:'Plomería', icon:'🔧' }, description:'Hay una fuga debajo del lavamanos, gotea constantemente.' },
+  { id:'d3', title:'Pintura completa de apartamento 2 cuartos', location_zone:'Obarrio', budget:350, offers_count:5, created_at: new Date(Date.now()-7200000).toISOString(), categories:{ name:'Pintura', icon:'🖌️' }, description:'Apartamento de 85m², necesito pintura blanca en paredes y techo.' },
+  { id:'d4', title:'Limpieza profunda de oficina', location_zone:'Costa del Este', budget:120, offers_count:4, created_at: new Date(Date.now()-10800000).toISOString(), categories:{ name:'Limpieza', icon:'🧹' }, description:'Oficina de 200m², limpieza general incluyendo vidrios y baños.' },
+  { id:'d5', title:'Instalar 10 tomacorrientes nuevos', location_zone:'Clayton', budget:150, offers_count:1, created_at: new Date(Date.now()-14400000).toISOString(), categories:{ name:'Electricidad', icon:'⚡' }, description:'Casa nueva, necesito instalar tomas en sala, cocina y cuartos.' },
+  { id:'d6', title:'Mudanza de apartamento a casa', location_zone:'Bella Vista', budget:250, offers_count:0, created_at: new Date(Date.now()-18000000).toISOString(), categories:{ name:'Mudanzas', icon:'📦' }, description:'2 cuartos, living, cocina equipada. Distancia aprox 5km.' },
 ]
 
 const QUICK_SEARCHES = [
@@ -51,7 +60,7 @@ export default function HomePage() {
       .eq('status', 'open')
       .order('created_at', { ascending: false })
       .limit(6)
-      .then(({ data }) => { if (data) setTasks(data) })
+      .then(({ data }) => { setTasks(data && data.length > 0 ? data : DEMO_TASKS) })
   }, [])
 
   const handleSearch = (e: React.FormEvent) => {
