@@ -1,25 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-// Fetch personalizado: garantiza que todos los headers sean ASCII puro (ISO-8859-1)
-// Necesario por un bug en supabase-js 2.100+ con X-Client-Info en ciertos browsers
-const asciiFetch: typeof fetch = (input, init?) => {
-  if (init?.headers) {
-    const clean: Record<string, string> = {}
-    const h = new Headers(init.headers as HeadersInit)
-    h.forEach((value, key) => {
-      // Eliminar cualquier caracter fuera de ASCII (0-127)
-      clean[key] = value.replace(/[^\x00-\x7F]/g, '')
-    })
-    init = { ...init, headers: clean }
-  }
-  return fetch(input, init)
-}
+const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? 'https://mkhlgcrzuddgfquzmobu.supabase.co'
+const supabaseKey  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1raGxnY3J6dWRkZ2ZxdXptb2J1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxNjU5MjQsImV4cCI6MjA5NTc0MTkyNH0.sU6gSrWsD5OT3AEEh9eBlKxaJWpY-1MhSehu-CetwAQ'
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
-  global: { fetch: asciiFetch },
   auth: {
     persistSession: true,
     autoRefreshToken: true,
