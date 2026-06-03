@@ -44,6 +44,11 @@ export default function InstantPage() {
   const [phase, setPhase]               = useState<Phase>('form')
   const [form, setForm]                 = useState({ title: '', category: 'aire-acondicionado', budget: '' })
   const [sheetExpanded, setSheetExpanded] = useState(true)
+  const [showSearch, setShowSearch]       = useState(false)
+  const [searchText, setSearchText]       = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searching, setSearching]         = useState(false)
+  const searchTimer = useRef<any>(null)
   const [taskId, setTaskId]             = useState<string|null>(null)
   const [offers, setOffers]             = useState<any[]>([])
   const [accepting, setAccepting]       = useState(false)
@@ -125,6 +130,29 @@ export default function InstantPage() {
       setAdjustingMap(false)
     }, 600)
   }, [])
+
+  const searchAddress = async (q: string) => {
+    if (q.length < 3) { setSearchResults([]); return }
+    setSearching(true)
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' Panama')}&format=json&limit=6&countrycodes=pa&accept-language=es`
+      )
+      const results = await r.json()
+      setSearchResults(results)
+    } catch { setSearchResults([]) }
+    setSearching(false)
+  }
+
+  const selectSearchResult = (item: any) => {
+    const lat = parseFloat(item.lat), lng = parseFloat(item.lon)
+    const name = item.display_name.split(',').slice(0,2).join(',').trim()
+    setCoords([lat, lng])
+    setLocationName(name)
+    setShowSearch(false)
+    setSearchText('')
+    setSearchResults([])
+  }
 
   const subscribeOffers = (tId: string) => {
     channelRef.current = supabase.channel(`instant-${tId}`)
@@ -284,9 +312,12 @@ export default function InstantPage() {
       {/* BOTTOM SHEET */}
       <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col">
 
-        {/* Pill de ubicación — siempre visible */}
+        {/* Pill de ubicación — toca para buscar */}
         <div className="mx-4 mb-2">
-          <div className="bg-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={() => setShowSearch(true)}
+            className="w-full bg-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-3 text-left"
+          >
             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
               geoLoading || adjustingMap ? 'bg-orange-100' : 'bg-green-100'
             }`}>
@@ -296,14 +327,19 @@ export default function InstantPage() {
               }
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-400 font-medium leading-none mb-0.5">Tu ubicación</p>
+              <p className="text-xs text-gray-400 font-medium leading-none mb-0.5">
+                ¿Dónde necesitas el servicio? — toca para cambiar
+              </p>
               <p className="font-bold text-gray-900 text-sm truncate">{locationName}</p>
             </div>
-            <button onClick={detectGPS} disabled={geoLoading}
-              className="flex items-center gap-1 text-xs text-orange-500 font-bold bg-orange-50 px-3 py-1.5 rounded-full disabled:opacity-50 flex-shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); detectGPS() }}
+              disabled={geoLoading}
+              className="flex items-center gap-1 text-xs text-orange-500 font-bold bg-orange-50 px-3 py-1.5 rounded-full disabled:opacity-50 flex-shrink-0"
+            >
               <Navigation size={11}/> GPS
             </button>
-          </div>
+          </button>
         </div>
 
         {/* Sheet principal */}
@@ -479,6 +515,76 @@ export default function InstantPage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL BÚSQUEDA DE DIRECCIÓN */}
+      {showSearch && (
+        <div className="absolute inset-0 z-50 bg-white flex flex-col">
+          <div className="flex items-center gap-3 px-4 pt-12 pb-3 border-b border-gray-100">
+            <button onClick={() => { setShowSearch(false); setSearchText(''); setSearchResults([]) }}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100">
+              <ArrowLeft size={20} className="text-gray-700"/>
+            </button>
+            <div className="flex-1 relative">
+              <input
+                autoFocus
+                value={searchText}
+                onChange={e => {
+                  setSearchText(e.target.value)
+                  clearTimeout(searchTimer.current)
+                  searchTimer.current = setTimeout(() => searchAddress(e.target.value), 400)
+                }}
+                placeholder="Busca tu dirección, barrio o edificio..."
+                className="w-full bg-gray-100 rounded-xl px-4 py-3 text-sm outline-none font-medium"
+              />
+              {searching && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin"/>}
+            </div>
+          </div>
+
+          <button onClick={() => { detectGPS(); setShowSearch(false) }}
+            className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 border-b border-gray-100">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <Navigation size={18} className="text-blue-600"/>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 text-sm">Usar mi ubicación actual (GPS)</p>
+              <p className="text-xs text-gray-400">Detectar automáticamente con tu dispositivo</p>
+            </div>
+          </button>
+
+          <div className="flex-1 overflow-y-auto">
+            {searchText.length < 3 && (
+              <div className="px-5 py-4">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-3">Zonas populares en Panamá</p>
+                {['Marbella','San Francisco','Obarrio','El Cangrejo','Costa del Este','Punta Pacifica','Bella Vista','Clayton','Albrook','Las Cumbres','Arraijan','La Chorrera'].map(z => (
+                  <button key={z} onClick={() => { setSearchText(z); searchAddress(z) }}
+                    className="flex items-center gap-3 w-full py-3 hover:bg-gray-50 rounded-xl px-2">
+                    <MapPin size={15} className="text-gray-300 flex-shrink-0"/>
+                    <span className="text-sm text-gray-700 font-medium">{z}, Panamá</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchText.length >= 3 && !searching && searchResults.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                <MapPin size={32} className="mx-auto mb-2 opacity-30"/>
+                <p className="text-sm">Sin resultados — intenta con otro nombre</p>
+              </div>
+            )}
+            {searchResults.map((item, i) => (
+              <button key={i} onClick={() => selectSearchResult(item)}
+                className="flex items-center gap-4 w-full px-5 py-4 hover:bg-gray-50 border-b border-gray-50 text-left">
+                <div className="w-9 h-9 bg-orange-50 rounded-full flex items-center justify-center flex-shrink-0">
+                  <MapPin size={15} className="text-orange-500"/>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm truncate">{item.display_name.split(',')[0]}</p>
+                  <p className="text-xs text-gray-400 truncate">{item.display_name.split(',').slice(1,3).join(',')}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
