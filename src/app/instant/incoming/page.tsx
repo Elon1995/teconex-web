@@ -210,7 +210,7 @@ export default function IncomingPage() {
 
       {/* Mapa fondo */}
       <div className="absolute inset-0">
-        <MapView center={coords} zoom={13} userCoords={coords} markers={mapMarkers} />
+        <MapView center={coords} zoom={13} markers={mapMarkers} />
       </div>
 
       {/* Top bar */}
