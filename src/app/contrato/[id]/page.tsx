@@ -2,11 +2,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
 import {
   CheckCircle, MapPin, Phone, Send, Star, Clock,
-  ArrowLeft, FileText, Zap, AlertCircle, X
+  ArrowLeft, FileText, Zap, AlertCircle, X, Navigation
 } from 'lucide-react'
+
+const MapView = dynamic(() => import('@/components/instant/MapView'), { ssr: false })
 
 type ContractStatus = 'confirmed' | 'on_way' | 'arrived' | 'in_progress' | 'completed'
 
@@ -45,6 +48,10 @@ export default function ContratoPage() {
   const [reviewText, setReviewText] = useState('')
   const [submittingReview, setSubmittingReview] = useState(false)
   const [showContract, setShowContract] = useState(false)
+  const [fixerCoords, setFixerCoords] = useState<[number,number] | null>(null)
+  const [clientCoords, setClientCoords] = useState<[number,number] | null>(null)
+  const [showMap, setShowMap] = useState(false)
+  const watchIdRef = useRef<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -54,6 +61,58 @@ export default function ContratoPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Tracking GPS: fixer comparte ubicación, cliente la ve en tiempo real
+  useEffect(() => {
+    if (!contract || !currentUser) return
+    const isPoster = currentUser.id === contract.poster_id
+    const isTasker = currentUser.id === contract.tasker_id
+
+    // Fixer: empieza a compartir GPS cuando está en camino
+    if (isTasker && (workStatus === 'on_way' || workStatus === 'arrived' || workStatus === 'in_progress')) {
+      if (navigator.geolocation) {
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          async pos => {
+            const lat = pos.coords.latitude, lng = pos.coords.longitude
+            setFixerCoords([lat, lng])
+            // Guardar en Supabase para que el cliente lo vea
+            await supabase.from('contracts').update({
+              fixer_lat: lat, fixer_lng: lng
+            } as any).eq('id', contract.id)
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 5000 }
+        )
+      }
+    } else {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current)
+        watchIdRef.current = null
+      }
+    }
+
+    // Cliente: suscribirse a cambios de ubicación del fixer
+    if (isPoster) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+          setClientCoords([pos.coords.latitude, pos.coords.longitude])
+        })
+      }
+      const trackChannel = supabase.channel(`tracking-${contract.id}`)
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'contracts', filter: `id=eq.${contract.id}` },
+          payload => {
+            const c = payload.new as any
+            if (c.fixer_lat && c.fixer_lng) setFixerCoords([c.fixer_lat, c.fixer_lng])
+          })
+        .subscribe()
+      return () => { supabase.removeChannel(trackChannel) }
+    }
+
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
+    }
+  }, [contract, currentUser, workStatus])
 
   // Realtime mensajes
   useEffect(() => {
@@ -324,6 +383,54 @@ export default function ContratoPage() {
             </div>
           </div>
         </div>
+
+        {/* MAPA DE TRACKING — visible cuando fixer está en camino */}
+        {(workStatus === 'on_way' || workStatus === 'arrived' || workStatus === 'in_progress') && (
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <button
+              onClick={() => setShowMap(v => !v)}
+              className="w-full px-5 py-3.5 flex items-center justify-between"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"/>
+                <span className="font-semibold text-gray-800 text-sm">
+                  {workStatus === 'on_way' ? 'Fixer en camino — ver en mapa' :
+                   workStatus === 'arrived' ? 'Fixer llegó a tu ubicación' : 'Trabajo en progreso'}
+                </span>
+              </div>
+              <Navigation size={16} className="text-orange-500"/>
+            </button>
+            {showMap && (fixerCoords || clientCoords) && (
+              <div style={{ height: 220 }}>
+                <MapView
+                  center={fixerCoords || clientCoords || [8.994, -79.519]}
+                  zoom={15}
+                  markers={[
+                    ...(fixerCoords ? [{
+                      id: 'fixer',
+                      lat: fixerCoords[0],
+                      lng: fixerCoords[1],
+                      label: '🔧 Fixer',
+                      name: taskerProfile?.full_name || 'Fixer'
+                    }] : []),
+                    ...(clientCoords && isPoster ? [{
+                      id: 'client',
+                      lat: clientCoords[0],
+                      lng: clientCoords[1],
+                      label: '📍 Tú',
+                      name: 'Tu ubicación'
+                    }] : [])
+                  ]}
+                />
+              </div>
+            )}
+            {showMap && !fixerCoords && !clientCoords && (
+              <div className="px-5 pb-4 text-center text-sm text-gray-400">
+                Esperando señal GPS del Fixer...
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Acciones del Fixer */}
         {isTasker && workStatus !== 'completed' && (
