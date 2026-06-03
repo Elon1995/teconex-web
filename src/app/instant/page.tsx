@@ -110,7 +110,7 @@ export default function InstantPage() {
     try {
       const r = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=es`,
-        { headers: { 'User-Agent': 'TECONEX-App/1.0' } }
+        {}
       )
       const d = await r.json()
       const a = d.address
